@@ -1,0 +1,4 @@
+flask>=3.0
+pyinstaller>=6.0
+openpyxl>=3.0
+ttkbootstrap>=1.10

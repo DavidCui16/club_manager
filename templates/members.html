@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">成员管理</h3>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="input-group" style="max-width: 350px;">
+        <input type="text" id="searchInput" class="form-control" placeholder="搜索姓名/学号/院系...">
+        <button class="btn btn-outline-secondary" onclick="loadMembers()">搜索</button>
+        <button class="btn btn-outline-secondary" onclick="document.getElementById('searchInput').value='';loadMembers()">全部</button>
+    </div>
+    <div>
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none" onchange="importExcel()">
+        <button class="btn btn-outline-success me-1" onclick="document.getElementById('excelFileInput').click()">
+            <i class="bi bi-file-earmark-excel"></i> 导入Excel
+        </button>
+        <button class="btn btn-primary" onclick="showModal()">+ 添加成员</button>
+    </div>
+</div>
+
+<table class="table table-hover table-bordered">
+    <thead class="table-light">
+        <tr>
+            <th>ID</th><th>姓名</th><th>学号</th><th>电话</th><th>邮箱</th><th>院系</th><th>加入日期</th><th>状态</th><th>操作</th>
+        </tr>
+    </thead>
+    <tbody id="memberTable"></tbody>
+</table>
+
+<div class="modal fade" id="memberModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">添加成员</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="mb-2"><label class="form-label">姓名 *</label><input id="name" class="form-control" required></div>
+                <div class="mb-2"><label class="form-label">学号</label><input id="student_id" class="form-control"></div>
+                <div class="mb-2"><label class="form-label">电话</label><input id="phone" class="form-control"></div>
+                <div class="mb-2"><label class="form-label">邮箱</label><input id="email" class="form-control"></div>
+                <div class="mb-2"><label class="form-label">院系</label><input id="department" class="form-control"></div>
+                <div class="mb-2" id="statusGroup" style="display:none">
+                    <label class="form-label">状态</label>
+                    <select id="status" class="form-select"><option value="active">活跃</option><option value="inactive">非活跃</option></select>
+                </div>
+                <div class="mb-2"><label class="form-label">备注</label><input id="notes" class="form-control"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-primary" onclick="saveMember()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadMembers() {
+    const kw = document.getElementById('searchInput').value;
+    const resp = await fetch(`/api/members?search=${encodeURIComponent(kw)}`);
+    const data = await resp.json();
+    const tbody = document.getElementById('memberTable');
+    tbody.innerHTML = data.map(m => `
+        <tr>
+            <td>${m.id}</td><td>${m.name}</td><td>${m.student_id||''}</td><td>${m.phone||''}</td>
+            <td>${m.email||''}</td><td>${m.department||''}</td><td>${m.join_date}</td>
+            <td><span class="badge ${m.status=='active'?'bg-success':'bg-secondary'}">${m.status=='active'?'活跃':'非活跃'}</span></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick='editMember(${JSON.stringify(m)})'>编辑</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteMember(${m.id},'${m.name}')">删除</button>
+            </td>
+        </tr>`).join('');
+}
+
+function showModal() {
+    document.getElementById('editId').value = '';
+    document.getElementById('modalTitle').textContent = '添加成员';
+    ['name','student_id','phone','email','department','notes'].forEach(f => document.getElementById(f).value='');
+    document.getElementById('statusGroup').style.display = 'none';
+    new bootstrap.Modal('#memberModal').show();
+}
+
+function editMember(m) {
+    document.getElementById('editId').value = m.id;
+    document.getElementById('modalTitle').textContent = '编辑成员';
+    document.getElementById('name').value = m.name;
+    document.getElementById('student_id').value = m.student_id||'';
+    document.getElementById('phone').value = m.phone||'';
+    document.getElementById('email').value = m.email||'';
+    document.getElementById('department').value = m.department||'';
+    document.getElementById('notes').value = m.notes||'';
+    document.getElementById('status').value = m.status;
+    document.getElementById('statusGroup').style.display = 'block';
+    new bootstrap.Modal('#memberModal').show();
+}
+
+async function saveMember() {
+    const id = document.getElementById('editId').value;
+    const data = {
+        name: document.getElementById('name').value,
+        student_id: document.getElementById('student_id').value,
+        phone: document.getElementById('phone').value,
+        email: document.getElementById('email').value,
+        department: document.getElementById('department').value,
+        notes: document.getElementById('notes').value,
+        status: document.getElementById('status').value,
+    };
+    if (!data.name) return alert('姓名不能为空');
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `/api/members/${id}` : '/api/members';
+    await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    bootstrap.Modal.getInstance('#memberModal').hide();
+    loadMembers();
+}
+
+async function deleteMember(id, name) {
+    if (!confirm(`确定删除成员「${name}」吗？`)) return;
+    await fetch(`/api/members/${id}`, {method:'DELETE'});
+    loadMembers();
+}
+
+async function importExcel() {
+    const input = document.getElementById('excelFileInput');
+    if (!input.files.length) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    const resp = await fetch('/api/members/import', {method:'POST', body:formData});
+    const result = await resp.json();
+    alert(result.msg || (result.ok ? '导入成功' : '导入失败'));
+    input.value = '';
+    loadMembers();
+}
+
+loadMembers();
+</script>
+{% endblock %}

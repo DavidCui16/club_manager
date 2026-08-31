@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">活动管理</h3>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="input-group" style="max-width: 350px;">
+        <input type="text" id="searchInput" class="form-control" placeholder="搜索活动...">
+        <button class="btn btn-outline-secondary" onclick="loadEvents()">搜索</button>
+        <button class="btn btn-outline-secondary" onclick="document.getElementById('searchInput').value='';loadEvents()">全部</button>
+    </div>
+    <button class="btn btn-primary" onclick="showModal()">+ 添加活动</button>
+</div>
+
+<table class="table table-hover table-bordered">
+    <thead class="table-light">
+        <tr>
+            <th>ID</th><th>活动名称</th><th>日期</th><th>地点</th><th>已报名/上限</th><th>费用(元)</th><th>状态</th><th>操作</th>
+        </tr>
+    </thead>
+    <tbody id="eventTable"></tbody>
+</table>
+
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">添加活动</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="mb-2"><label class="form-label">活动名称 *</label><input id="name" class="form-control" required></div>
+                <div class="mb-2"><label class="form-label">日期</label><input id="event_date" class="form-control" type="date"></div>
+                <div class="mb-2"><label class="form-label">地点</label><input id="location" class="form-control"></div>
+                <div class="mb-2"><label class="form-label">人数上限 (0=不限)</label><input id="max_participants" class="form-control" type="number" value="0"></div>
+                <div class="mb-2"><label class="form-label">费用</label><input id="fee" class="form-control" type="number" step="0.01" value="0"></div>
+                <div class="mb-2"><label class="form-label">描述</label><input id="description" class="form-control"></div>
+                <div class="mb-2" id="statusGroup" style="display:none">
+                    <label class="form-label">状态</label>
+                    <select id="status" class="form-select">
+                        <option value="upcoming">即将开始</option><option value="ongoing">进行中</option>
+                        <option value="finished">已结束</option><option value="cancelled">已取消</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-primary" onclick="saveEvent()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="participantModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">报名管理</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="pidEventId">
+                <div class="d-flex gap-2 mb-3">
+                    <select id="pidMemberSelect" class="form-select" style="max-width:250px;"></select>
+                    <button class="btn btn-success" onclick="addParticipant()">添加报名</button>
+                </div>
+                <table class="table table-sm">
+                    <thead><tr><th>ID</th><th>姓名</th><th>学号</th><th>院系</th><th>电话</th><th>操作</th></tr></thead>
+                    <tbody id="pidMemberTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadEvents() {
+    const kw = document.getElementById('searchInput').value;
+    const resp = await fetch(`/api/events?search=${encodeURIComponent(kw)}`);
+    const data = await resp.json();
+    const tbody = document.getElementById('eventTable');
+    const statusMap = {upcoming:'即将开始',ongoing:'进行中',finished:'已结束',cancelled:'已取消'};
+    const colorMap = {upcoming:'bg-info',ongoing:'bg-success',finished:'bg-secondary',cancelled:'bg-danger'};
+    tbody.innerHTML = data.map(e => `
+        <tr>
+            <td>${e.id}</td><td>${e.name}</td><td>${e.event_date}</td><td>${e.location||''}</td>
+            <td>${e.participant_count}/${e.max_participants||'∞'}</td><td>${e.fee}</td>
+            <td><span class="badge ${colorMap[e.status]}">${statusMap[e.status]}</span></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick='manageParticipants(${e.id})'>报名</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick='editEvent(${JSON.stringify(e)})'>编辑</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteEvent(${e.id},'${e.name}')">删除</button>
+            </td>
+        </tr>`).join('');
+}
+
+function showModal() {
+    document.getElementById('editId').value = '';
+    document.getElementById('modalTitle').textContent = '添加活动';
+    ['name','event_date','location','description'].forEach(f => document.getElementById(f).value='');
+    document.getElementById('max_participants').value = 0;
+    document.getElementById('fee').value = 0;
+    document.getElementById('statusGroup').style.display = 'none';
+    new bootstrap.Modal('#eventModal').show();
+}
+
+function editEvent(e) {
+    document.getElementById('editId').value = e.id;
+    document.getElementById('modalTitle').textContent = '编辑活动';
+    document.getElementById('name').value = e.name;
+    document.getElementById('event_date').value = e.event_date;
+    document.getElementById('location').value = e.location||'';
+    document.getElementById('max_participants').value = e.max_participants||0;
+    document.getElementById('fee').value = e.fee||0;
+    document.getElementById('description').value = e.description||'';
+    document.getElementById('status').value = e.status;
+    document.getElementById('statusGroup').style.display = 'block';
+    new bootstrap.Modal('#eventModal').show();
+}
+
+async function saveEvent() {
+    const id = document.getElementById('editId').value;
+    const data = {
+        name: document.getElementById('name').value,
+        event_date: document.getElementById('event_date').value,
+        location: document.getElementById('location').value,
+        description: document.getElementById('description').value,
+        max_participants: document.getElementById('max_participants').value,
+        fee: document.getElementById('fee').value,
+        status: document.getElementById('status').value,
+    };
+    if (!data.name) return alert('活动名称不能为空');
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `/api/events/${id}` : '/api/events';
+    await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    bootstrap.Modal.getInstance('#eventModal').hide();
+    loadEvents();
+}
+
+async function deleteEvent(id, name) {
+    if (!confirm(`确定删除活动「${name}」吗？`)) return;
+    await fetch(`/api/events/${id}`, {method:'DELETE'});
+    loadEvents();
+}
+
+async function manageParticipants(eventId) {
+    document.getElementById('pidEventId').value = eventId;
+    const [membersResp, summaryResp] = await Promise.all([
+        fetch('/api/summary'),
+        fetch(`/api/events/${eventId}/participants`)
+    ]);
+    const summary = await summaryResp.json();
+    const allMembers = summary.members;
+    const participants = await membersResp.json();
+
+    const sel = document.getElementById('pidMemberSelect');
+    sel.innerHTML = '<option value="">选择成员...</option>' + allMembers.map(m => `<option value="${m.id}">${m.name} (${m.student_id||''})</option>`).join('');
+
+    renderParticipants(participants);
+    new bootstrap.Modal('#participantModal').show();
+}
+
+function renderParticipants(list) {
+    const tbody = document.getElementById('pidMemberTable');
+    tbody.innerHTML = list.map(m => `
+        <tr>
+            <td>${m.id}</td><td>${m.name}</td><td>${m.student_id||''}</td>
+            <td>${m.department||''}</td><td>${m.phone||''}</td>
+            <td><button class="btn btn-sm btn-outline-danger" onclick="removeParticipant(${m.id})">取消</button></td>
+        </tr>`).join('');
+}
+
+async function addParticipant() {
+    const eventId = document.getElementById('pidEventId').value;
+    const memberId = document.getElementById('pidMemberSelect').value;
+    if (!memberId) return alert('请选择成员');
+    const resp = await fetch(`/api/events/${eventId}/participants`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({member_id:parseInt(memberId)})
+    });
+    const r = await resp.json();
+    if (!r.ok) return alert(r.msg);
+    loadEvents();
+    const membersResp = await fetch(`/api/events/${eventId}/participants`);
+    renderParticipants(await membersResp.json());
+}
+
+async function removeParticipant(memberId) {
+    const eventId = document.getElementById('pidEventId').value;
+    await fetch(`/api/events/${eventId}/participants/${memberId}`, {method:'DELETE'});
+    loadEvents();
+    const membersResp = await fetch(`/api/events/${eventId}/participants`);
+    renderParticipants(await membersResp.json());
+}
+
+loadEvents();
+</script>
+{% endblock %}

@@ -1,0 +1,15 @@
+# 数据库文件
+club.db
+
+# 构建产物
+build/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+env/

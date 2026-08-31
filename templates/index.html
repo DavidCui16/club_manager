@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-4">首页概览</h3>
+<div class="row g-3">
+    <div class="col-md-3">
+        <div class="card text-bg-primary stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-people display-5"></i>
+                <h5 class="card-title mt-2">成员总数</h5>
+                <p class="display-6">{{ member_count }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-success stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar-event display-5"></i>
+                <h5 class="card-title mt-2">活动总数</h5>
+                <p class="display-6">{{ event_count }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-info stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-cash-coin display-5"></i>
+                <h5 class="card-title mt-2">总收入</h5>
+                <p class="display-6">¥{{ "%.2f"|format(total_income) }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-warning stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-piggy-bank display-5"></i>
+                <h5 class="card-title mt-2">当前结余</h5>
+                <p class="display-6">¥{{ "%.2f"|format(balance) }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">财务管理</h3>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4"><div class="card text-bg-success"><div class="card-body text-center"><h6>总收入</h6><h4 id="sumIncome">0.00</h4></div></div></div>
+    <div class="col-md-4"><div class="card text-bg-danger"><div class="card-body text-center"><h6>总支出</h6><h4 id="sumExpense">0.00</h4></div></div></div>
+    <div class="col-md-4"><div class="card text-bg-primary"><div class="card-body text-center"><h6>结余</h6><h4 id="sumBalance">0.00</h4></div></div></div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div></div>
+    <button class="btn btn-primary" onclick="showModal()">+ 添加记录</button>
+</div>
+
+<table class="table table-hover table-bordered">
+    <thead class="table-light">
+        <tr>
+            <th>ID</th><th>日期</th><th>类型</th><th>金额(元)</th><th>类别</th><th>关联成员</th><th>关联活动</th><th>描述</th><th>操作</th>
+        </tr>
+    </thead>
+    <tbody id="financeTable"></tbody>
+</table>
+
+<div class="modal fade" id="financeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">添加财务记录</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="mb-2"><label class="form-label">类型</label>
+                    <select id="ftype" class="form-select"><option value="income">收入</option><option value="expense">支出</option></select>
+                </div>
+                <div class="mb-2"><label class="form-label">金额 *</label><input id="amount" class="form-control" type="number" step="0.01" required></div>
+                <div class="mb-2"><label class="form-label">类别</label>
+                    <select id="category" class="form-select">
+                        <option value="会费">会费</option><option value="赞助">赞助</option>
+                        <option value="活动收入">活动收入</option><option value="其他收入">其他收入</option>
+                        <option value="活动支出">活动支出</option><option value="物资采购">物资采购</option>
+                        <option value="场地费">场地费</option><option value="其他支出">其他支出</option>
+                    </select>
+                </div>
+                <div class="mb-2"><label class="form-label">关联成员</label><select id="member_id" class="form-select"></select></div>
+                <div class="mb-2"><label class="form-label">关联活动</label><select id="event_id" class="form-select"></select></div>
+                <div class="mb-2"><label class="form-label">描述</label><input id="description" class="form-control"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-primary" onclick="saveFinance()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let allMembers = [];
+let allEvents = [];
+
+async function init() {
+    const [finResp, summResp] = await Promise.all([
+        fetch('/api/finances'),
+        fetch('/api/summary')
+    ]);
+    const finances = await finResp.json();
+    const summary = await summResp.json();
+    allMembers = summary.members;
+    document.getElementById('sumIncome').textContent = summary.income.toFixed(2);
+    document.getElementById('sumExpense').textContent = summary.expense.toFixed(2);
+    document.getElementById('sumBalance').textContent = summary.balance.toFixed(2);
+    renderFinances(finances);
+
+    const selM = document.getElementById('member_id');
+    selM.innerHTML = '<option value="">无</option>' + summary.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+
+    const evResp = await fetch('/api/events');
+    allEvents = await evResp.json();
+    const selE = document.getElementById('event_id');
+    selE.innerHTML = '<option value="">无</option>' + allEvents.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+}
+
+function renderFinances(data) {
+    const tbody = document.getElementById('financeTable');
+    tbody.innerHTML = data.map(f => `
+        <tr>
+            <td>${f.id}</td><td>${f.date}</td>
+            <td><span class="badge ${f.type=='income'?'bg-success':'bg-danger'}">${f.type=='income'?'收入':'支出'}</span></td>
+            <td>${f.amount.toFixed(2)}</td><td>${f.category||''}</td>
+            <td>${f.member_name||''}</td><td>${f.event_name||''}</td><td>${f.description||''}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-secondary" onclick='editFinance(${JSON.stringify(f)})'>编辑</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteFinance(${f.id})">删除</button>
+            </td>
+        </tr>`).join('');
+}
+
+function showModal() {
+    document.getElementById('editId').value = '';
+    document.getElementById('modalTitle').textContent = '添加财务记录';
+    document.getElementById('amount').value = '';
+    document.getElementById('description').value = '';
+    new bootstrap.Modal('#financeModal').show();
+}
+
+function editFinance(f) {
+    document.getElementById('editId').value = f.id;
+    document.getElementById('modalTitle').textContent = '编辑财务记录';
+    document.getElementById('ftype').value = f.type;
+    document.getElementById('amount').value = f.amount;
+    document.getElementById('category').value = f.category||'';
+    document.getElementById('description').value = f.description||'';
+    const memberOpt = [...document.getElementById('member_id').options].find(o => o.text === (f.member_name||''));
+    document.getElementById('member_id').value = memberOpt ? memberOpt.value : '';
+    const eventOpt = [...document.getElementById('event_id').options].find(o => o.text === (f.event_name||''));
+    document.getElementById('event_id').value = eventOpt ? eventOpt.value : '';
+    new bootstrap.Modal('#financeModal').show();
+}
+
+async function saveFinance() {
+    const id = document.getElementById('editId').value;
+    const data = {
+        type: document.getElementById('ftype').value,
+        amount: document.getElementById('amount').value,
+        category: document.getElementById('category').value,
+        description: document.getElementById('description').value,
+        member_id: document.getElementById('member_id').value || null,
+        event_id: document.getElementById('event_id').value || null,
+    };
+    if (!data.amount || parseFloat(data.amount) <= 0) return alert('金额必须大于0');
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `/api/finances/${id}` : '/api/finances';
+    await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    bootstrap.Modal.getInstance('#financeModal').hide();
+    init();
+}
+
+async function deleteFinance(id) {
+    if (!confirm('确定删除该记录？')) return;
+    await fetch(`/api/finances/${id}`, {method:'DELETE'});
+    init();
+}
+
+init();
+</script>
+{% endblock %}
